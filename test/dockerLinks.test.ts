@@ -225,6 +225,83 @@ describe("Dockerfile links", function () {
         });
     });
 
+    describe("COPY --from", function() {
+        it("COPY --from=ghcr.io/php/pie:bin /pie /usr/bin/pie", function() {
+            const links = service.computeLinks("COPY --from=ghcr.io/php/pie:bin /pie /usr/bin/pie");
+            assert.strictEqual(links.length, 1);
+            assertLink(links[0], "https://github.com/php/pie/pkgs/container/pie", undefined, 0, 12, 0, 27);
+            links[0] = service.resolveLink(links[0]);
+            assertLink(links[0], "https://github.com/php/pie/pkgs/container/pie", undefined, 0, 12, 0, 27);
+        });
+
+        it("COPY --from=ghcr.io/php/pie@sha256:... after a FROM", function() {
+            const links = service.computeLinks("FROM php:8.4\nCOPY --from=ghcr.io/php/pie@sha256:613685c22f65d01f2264bdd49b8a336488e14faf29f3ff9b6bf76a4da23c4700 /pie /usr/bin/pie");
+            assert.strictEqual(links.length, 2);
+            assertLink(links[0], undefined, "_/php/", 0, 5, 0, 8);
+            assertLink(links[1], "https://github.com/php/pie/pkgs/container/pie", undefined, 1, 12, 1, 27);
+        });
+
+        it("COPY --from=composer:2", function() {
+            const links = service.computeLinks("COPY --from=composer:2 /usr/bin/composer /usr/bin/composer");
+            assert.strictEqual(links.length, 1);
+            assertLink(links[0], undefined, "_/composer/", 0, 12, 0, 20);
+            links[0] = service.resolveLink(links[0]);
+            assertLink(links[0], "https://hub.docker.com/_/composer/", "_/composer/", 0, 12, 0, 20);
+        });
+
+        it("COPY --from=mlocati/php-extension-installer", function() {
+            const links = service.computeLinks("COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/bin/");
+            assert.strictEqual(links.length, 1);
+            assertLink(links[0], undefined, "r/mlocati/php-extension-installer/", 0, 12, 0, 43);
+        });
+
+        it("COPY --from=123456789012.dkr.ecr.eu-central-1.amazonaws.com/my-app:1.0", function() {
+            const links = service.computeLinks("COPY --from=123456789012.dkr.ecr.eu-central-1.amazonaws.com/my-app:1.0 /app /app");
+            assert.strictEqual(links.length, 1);
+            const target = "https://eu-central-1.console.aws.amazon.com/ecr/repositories/private/123456789012/my-app?region=eu-central-1";
+            assertLink(links[0], target, undefined, 0, 12, 0, 66);
+        });
+
+        it("COPY --from=public.ecr.aws/docker/library/node:20", function() {
+            const links = service.computeLinks("COPY --from=public.ecr.aws/docker/library/node:20 /a /b");
+            assert.strictEqual(links.length, 1);
+            assertLink(links[0], "https://gallery.ecr.aws/docker/library/node", undefined, 0, 12, 0, 46);
+        });
+
+        it("COPY --from=registry.example.com/my-app", function() {
+            const links = service.computeLinks("COPY --from=registry.example.com/my-app /a /b");
+            assert.strictEqual(links.length, 0);
+        });
+
+        it("COPY --from=<build stage name>", function() {
+            const links = service.computeLinks("FROM node AS Build\nFROM alpine\nCOPY --from=build /a /b");
+            assert.strictEqual(links.length, 2);
+            assertLink(links[0], undefined, "_/node/", 0, 5, 0, 9);
+            assertLink(links[1], undefined, "_/alpine/", 1, 5, 1, 11);
+        });
+
+        it("COPY --from=<build stage index>", function() {
+            const links = service.computeLinks("FROM node\nFROM alpine\nCOPY --from=0 /a /b");
+            assert.strictEqual(links.length, 2);
+        });
+
+        it("COPY --from=${IMAGE}", function() {
+            const links = service.computeLinks("ARG IMAGE=node\nFROM alpine\nCOPY --from=${IMAGE} /a /b");
+            assert.strictEqual(links.length, 1);
+            assertLink(links[0], undefined, "_/alpine/", 1, 5, 1, 11);
+        });
+
+        it("COPY --from=", function() {
+            const links = service.computeLinks("COPY --from= /a /b");
+            assert.strictEqual(links.length, 0);
+        });
+
+        it("COPY without --from", function() {
+            const links = service.computeLinks("COPY /a /b");
+            assert.strictEqual(links.length, 0);
+        });
+    });
+
     describe("build stages", function () {
         it("valid", () => {
             let links = service.computeLinks("FROM node AS base\nFROM base");
