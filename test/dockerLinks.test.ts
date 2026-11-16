@@ -157,6 +157,74 @@ describe("Dockerfile links", function () {
         });
     });
 
+    describe("Amazon ECR (private)", function() {
+        it("FROM 123456789012.dkr.ecr.eu-central-1.amazonaws.com/my-app", function() {
+            const links = service.computeLinks("FROM 123456789012.dkr.ecr.eu-central-1.amazonaws.com/my-app");
+            assert.strictEqual(links.length, 1);
+            const target = "https://eu-central-1.console.aws.amazon.com/ecr/repositories/private/123456789012/my-app?region=eu-central-1";
+            assertLink(links[0], target, undefined, 0, 5, 0, 59);
+            links[0] = service.resolveLink(links[0]);
+            assertLink(links[0], target, undefined, 0, 5, 0, 59);
+        });
+
+        it("FROM 123456789012.dkr.ecr.us-east-1.amazonaws.com/team/my-app:1.0", function() {
+            const links = service.computeLinks("FROM 123456789012.dkr.ecr.us-east-1.amazonaws.com/team/my-app:1.0");
+            assert.strictEqual(links.length, 1);
+            const target = "https://us-east-1.console.aws.amazon.com/ecr/repositories/private/123456789012/team/my-app?region=us-east-1";
+            assertLink(links[0], target, undefined, 0, 5, 0, 61);
+        });
+
+        it("FROM 123456789012.dkr.ecr.cn-north-1.amazonaws.com.cn/my-app", function() {
+            const links = service.computeLinks("FROM 123456789012.dkr.ecr.cn-north-1.amazonaws.com.cn/my-app");
+            assert.strictEqual(links.length, 1);
+            const target = "https://console.amazonaws.cn/ecr/repositories/private/123456789012/my-app?region=cn-north-1";
+            assertLink(links[0], target, undefined, 0, 5, 0, 60);
+        });
+    });
+
+    describe("Amazon ECR Public", function() {
+        it("FROM public.ecr.aws/docker/library/node:20", function() {
+            const links = service.computeLinks("FROM public.ecr.aws/docker/library/node:20");
+            assert.strictEqual(links.length, 1);
+            assertLink(links[0], "https://gallery.ecr.aws/docker/library/node", undefined, 0, 5, 0, 39);
+            links[0] = service.resolveLink(links[0]);
+            assertLink(links[0], "https://gallery.ecr.aws/docker/library/node", undefined, 0, 5, 0, 39);
+        });
+
+        it("FROM public.ecr.aws/node", function() {
+            const links = service.computeLinks("FROM public.ecr.aws/node");
+            assert.strictEqual(links.length, 0);
+        });
+    });
+
+    describe("explicit Docker Hub registry", function() {
+        it("FROM docker.io/library/node", function() {
+            const links = service.computeLinks("FROM docker.io/library/node");
+            assert.strictEqual(links.length, 1);
+            links[0] = service.resolveLink(links[0]);
+            assertLink(links[0], "https://hub.docker.com/_/node/", "_/node/", 0, 15, 0, 27);
+        });
+
+        it("FROM docker.io/microsoft/dotnet", function() {
+            const links = service.computeLinks("FROM docker.io/microsoft/dotnet");
+            assert.strictEqual(links.length, 1);
+            links[0] = service.resolveLink(links[0]);
+            assertLink(links[0], "https://hub.docker.com/r/microsoft/dotnet/", "r/microsoft/dotnet/", 0, 15, 0, 31);
+        });
+    });
+
+    describe("unknown registries", function() {
+        it("FROM registry.example.com/my-app", function() {
+            const links = service.computeLinks("FROM registry.example.com/my-app");
+            assert.strictEqual(links.length, 0);
+        });
+
+        it("FROM localhost:5000/my-app", function() {
+            const links = service.computeLinks("FROM localhost:5000/my-app");
+            assert.strictEqual(links.length, 0);
+        });
+    });
+
     describe("build stages", function () {
         it("valid", () => {
             let links = service.computeLinks("FROM node AS base\nFROM base");

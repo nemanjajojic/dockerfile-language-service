@@ -9,6 +9,10 @@ import { DockerfileParser } from 'dockerfile-ast';
 
 export class DockerLinks {
 
+    private static readonly ECR_PRIVATE_REGISTRY = /^(\d{12})\.dkr\.ecr(?:-fips)?\.([a-z0-9-]+)\.amazonaws\.com(\.cn)?$/;
+
+    private static readonly DOCKER_HUB_REGISTRIES = ["docker.io", "index.docker.io", "registry-1.docker.io"];
+
     public getLinks(content: string): DocumentLink[] {
         let dockerfile = DockerfileParser.parse(content);
         let links = [];
@@ -46,6 +50,34 @@ export class DockerLinks {
                     target: "https://quay.io/repository/" + name
                 })
                 continue;
+            }
+            if (registry === "public.ecr.aws") {
+                if (name.indexOf("/") === -1) {
+                    continue;
+                }
+                links.push({
+                    range: Range.create(from.getRegistryRange().start, from.getImageNameRange().end),
+                    target: "https://gallery.ecr.aws/" + name
+                });
+                continue;
+            }
+            const ecrMatch = registry === null ? null : DockerLinks.ECR_PRIVATE_REGISTRY.exec(registry);
+            if (ecrMatch !== null) {
+                const account = ecrMatch[1];
+                const region = ecrMatch[2];
+                const consoleHost = ecrMatch[3] === ".cn" ? "console.amazonaws.cn" : `${region}.console.aws.amazon.com`;
+                links.push({
+                    range: Range.create(from.getRegistryRange().start, from.getImageNameRange().end),
+                    target: `https://${consoleHost}/ecr/repositories/private/${account}/${name}?region=${region}`
+                });
+                continue;
+            }
+            if (registry !== null && DockerLinks.DOCKER_HUB_REGISTRIES.indexOf(registry) === -1) {
+                // unknown registry, do not point to Docker Hub
+                continue;
+            }
+            if (name !== null && registry !== null && name.indexOf("library/") === 0) {
+                name = name.substring("library/".length);
             }
             if (name !== null && stages.indexOf(name) === -1) {
                 if (name.indexOf('/') === -1) {
